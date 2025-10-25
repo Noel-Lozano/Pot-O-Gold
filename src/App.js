@@ -1,9 +1,6 @@
 import React from 'react';
-import FirebaseAuthApp from './firebase-auth/FirebaseAuthApp';
-import Pot_O_GoldDashboard from './components/Pot_O_GoldDashboard';
+import PotOGoldDashboard from './components/PotOGoldDashboard';
 
-function App() {
-  return <FirebaseAuthApp />;
+export default function App() {
+  return <PotOGoldDashboard />;
 }
-
-export default App;
