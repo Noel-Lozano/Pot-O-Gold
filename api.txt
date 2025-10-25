@@ -1,0 +1,13 @@
+787076b59b64a9f0732ca97ca6267bdf
+
+pat_id = 68fd1a569683f20dd51a46c8
+pat_checking = 68fd1cce9683f20dd51a46da
+
+[{"_id":"68fd1a569683f20dd51a46c8",
+"first_name":"Pat",
+"last_name":"Gold",
+"address":{"street_number":"123",
+"street_name":"Hackathon Ave",
+"city":"El Paso",
+"state":"TX",
+"zip":"79901"}}]

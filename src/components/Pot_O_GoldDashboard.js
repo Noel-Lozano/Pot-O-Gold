@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Trophy, Zap, Target, TrendingUp, Book, Wallet, 
+import {
+  Trophy, Zap, Target, TrendingUp, Book, Wallet,
   Star, Award, Flame, ChevronRight, Lock, Check,
   DollarSign, PiggyBank, LineChart, Users, Gift
 } from 'lucide-react';
 import leprechaun from '../assets/leprechaun.jpg';
+
+// API Constants
+const API_KEY = "787076b59b64a9f0732ca97ca6267bdf";
+const PAT_ID = "68fd1a569683f20dd51a46c8";
+const PAT_CHECKING = "68fd1cce9683f20dd51a46da";
 
 export default function FinQuestDashboard() {
   const [user, setUser] = useState({
@@ -22,6 +27,36 @@ export default function FinQuestDashboard() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [completedMission, setCompletedMission] = useState(null);
   const [showReward, setShowReward] = useState(false);
+  const [recentActivity, setRecentActivity] = useState([]);
+  
+  useEffect(() => {
+    // Fetch account balance
+    fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}?key=${API_KEY}`)
+      .then(response => response.json())
+      .then(data => {
+        setUser(currentUser => ({
+          ...currentUser,
+          balance: data.balance
+        }));
+      })
+      .catch(error => console.error("Error fetching balance:", error));
+
+    // Fetch recent activity (deposits)
+    fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/deposits?key=${API_KEY}`)
+      .then(response => response.json())
+      .then(data => {
+        // Format the API response to match the UI requirements
+        const formattedActivity = data.map(item => ({
+          action: "Deposit",
+          detail: item.description || "Bank Deposit",
+          xp: Math.floor(item.amount / 10), // Generate some XP based on deposit amount
+          time: new Date(item.transaction_date).toLocaleDateString()
+        }));
+        
+        setRecentActivity(formattedActivity);
+      })
+      .catch(error => console.error("Error fetching deposits:", error));
+  }, []); // Empty dependency array means this runs once on component mount
 
   const missions = [
     {
@@ -65,11 +100,6 @@ export default function FinQuestDashboard() {
     { id: 6, title: "Debt Slayer", unlocked: false, icon: Award }
   ];
 
-  const recentActivity = [
-    { action: "Completed mission", detail: "Daily Budget Check", xp: 50, time: "2h ago" },
-    { action: "Achievement unlocked", detail: "7-Day Streak", xp: 100, time: "5h ago" },
-    { action: "Level up", detail: "Reached Level 12", xp: 0, time: "1d ago" }
-  ];
 
   const completeMission = (mission) => {
     setCompletedMission(mission);
