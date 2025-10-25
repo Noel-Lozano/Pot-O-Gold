@@ -1,16 +1,107 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Trophy, Zap, Target, TrendingUp, Book, Wallet,
+import { 
+  Trophy, Zap, Target, TrendingUp, Book, Wallet, 
   Star, Award, Flame, ChevronRight, Lock, Check,
-  DollarSign, PiggyBank, LineChart, Users, Gift, Edit2, X
+  DollarSign, PiggyBank, LineChart, Users, Gift
 } from 'lucide-react';
-import leprechun from '../assets/leprechaun.jpg';
+import leprechaun from '../assets/leprechaun.jpg';
 
-// API Constants
-const API_KEY = "787076b59b64a9f0732ca97ca6267bdf";
-const PAT_ID = "68fd1a569683f20dd51a46c8";
-const PAT_CHECKING = "68fd1cce9683f20dd51a46da";
+/** ----- Seed missions (used to init state) ----- */
+const INITIAL_MISSIONS = [
+  {
+    id: 1,
+    title: "Save $50 This Week",
+    description: "Track your spending and save at least $50",
+    xp: 150,
+    difficulty: "Easy",
+    progress: 100,
+    icon: PiggyBank,
+    category: "Saving"
+  },
+  {
+    id: 2,
+    title: "Complete Investing 101",
+    description: "Learn the basics of stock market investing",
+    xp: 200,
+    difficulty: "Medium",
+    progress: 100,
+    icon: LineChart,
+    category: "Education"
+  },
+  {
+    id: 3,
+    title: "Build Emergency Fund",
+    description: "Save 3 months of expenses",
+    xp: 500,
+    difficulty: "Hard",
+    progress: 100,
+    icon: Target,
+    category: "Goal"
+  }
+];
+
+/** ----- Helper: create a new “next week” mission with a real title ----- */
+const TITLE_BANK = {
+  Saving: [
+    "Save $50 This Week",
+    "No-Spend Weekend Challenge",
+    "Round-Up Savings Sprint"
+  ],
+  Education: [
+    "Complete Investing 201",
+    "Budgeting Basics Quiz",
+    "Credit Score Deep Dive"
+  ],
+  Goal: [
+    "Emergency Fund Milestone",
+    "Debt Snowball Step",
+    "Big Purchase Planning"
+  ]
+};
+
+function nextWeekMission(old) {
+  const weekLabel = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const pool = TITLE_BANK[old.category] || [old.title || "Weekly Mission"];
+
+  // Stable-ish pick for the week so it doesn’t feel random every render
+  const weekIndex = Math.floor(Date.now() / (1000 * 60 * 60 * 24 * 7)) % pool.length;
+  const title = pool[weekIndex];
+
+  const descByCategory = {
+    Saving: "Track your spending and hit this week’s saving target.",
+    Education: "Learn a new money skill with quick, interactive content.",
+    Goal: "Make tangible progress toward your long-term goal."
+  };
+  const description = descByCategory[old.category] || "A fresh weekly challenge.";
+
+  return {
+    id: Date.now(), // simple unique id for demo
+    title,          // ✅ guaranteed, themed name
+    description: `${description} (Week of ${weekLabel})`,
+    xp: old.xp,
+    difficulty: old.difficulty,
+    progress: 0,
+    icon: old.icon,
+    category: old.category
+  };
+}
+
+/** ----- XP engine: add XP, handle level-ups, carryover, +500 cap per level ----- */
+function applyXP(prevUser, gainedXP) {
+  let xp = prevUser.xp + gainedXP;     // add incoming XP
+  let level = prevUser.level;
+  let cap = prevUser.xpToNext;          // current cap
+
+  // loop in case we jump multiple levels at once
+  while (xp >= cap) {
+    xp -= cap;      // carryover remainder
+    level += 1;     // level up!
+    cap += 500;     // next level gets +500 cap
+  }
+
+  return { ...prevUser, xp, level, xpToNext: cap };
+}
 
 export default function FinQuestDashboard() {
   const [user, setUser] = useState({
@@ -21,165 +112,16 @@ export default function FinQuestDashboard() {
     streak: 7,
     balance: 1240.50,
     savingsGoal: 5000,
-    currentSavings: 1850,
-    previousBalances: [
-      { month: "Sep 2025", balance: 1150.00, change: 8.5 },
-      { month: "Aug 2025", balance: 1060.00, change: 5.2 },
-      { month: "Jul 2025", balance: 1007.50, change: -2.1 },
-      { month: "Jun 2025", balance: 1029.20, change: 12.3 }
-    ]
+    currentSavings: 1850
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [completedMission, setCompletedMission] = useState(null);
   const [showReward, setShowReward] = useState(false);
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [tip, setTip] = useState("");
-  const [loadingTip, setLoadingTip] = useState(false);
-  
-  // Edit state
-  const [editingBalance, setEditingBalance] = useState(false);
-  const [editingGoal, setEditingGoal] = useState(false);
-  const [tempBalance, setTempBalance] = useState('');
-  const [tempSavingsGoal, setTempSavingsGoal] = useState('');
-  const [tempCurrentSavings, setTempCurrentSavings] = useState('');
-  
-  useEffect(() => {
-    // Fetch account balance
-    fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}?key=${API_KEY}`)
-      .then(response => response.json())
-      .then(data => {
-        setUser(currentUser => ({
-          ...currentUser,
-          balance: data.balance
-        }));
-      })
-      .catch(error => console.error("Error fetching balance:", error));
 
-    // Fetch all transaction types in parallel
-    Promise.all([
-      fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/purchases?key=${API_KEY}`)
-        .then(response => response.json())
-        .catch(error => {
-          console.error("Error fetching purchases:", error);
-          return [];
-        }),
-      
-      fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/deposits?key=${API_KEY}`)
-        .then(response => response.json())
-        .catch(error => {
-          console.error("Error fetching deposits:", error);
-          return [];
-        }),
-      
-      fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/withdrawals?key=${API_KEY}`)
-        .then(response => response.json())
-        .catch(error => {
-          console.error("Error fetching withdrawals:", error);
-          return [];
-        })
-    ])
-    .then(([purchases, deposits, withdrawals]) => {
-      const typedPurchases = purchases.map(item => ({
-        ...item,
-        type: 'purchase'
-      }));
-      
-      const typedDeposits = deposits.map(item => ({
-        ...item,
-        type: 'deposit'
-      }));
-      
-      const typedWithdrawals = withdrawals.map(item => ({
-        ...item,
-        type: 'withdrawal'
-      }));
-      
-      const allTransactions = [
-        ...typedPurchases,
-        ...typedDeposits,
-        ...typedWithdrawals
-      ];
-      
-      allTransactions.sort((a, b) => {
-        const dateA = a.purchase_date || a.transaction_date;
-        const dateB = b.purchase_date || b.transaction_date;
-        return new Date(dateB) - new Date(dateA);
-      });
-      
-      const formattedActivity = allTransactions.map(item => {
-        let action, detail, xp;
-        
-        switch(item.type) {
-          case 'purchase':
-            action = "Purchase";
-            detail = item.description || "Purchase";
-            xp = Math.floor(item.amount / 20);
-            break;
-          case 'deposit':
-            action = "Deposit";
-            detail = item.description || "Bank Deposit";
-            xp = Math.floor(item.amount / 10);
-            break;
-          case 'withdrawal':
-            action = "Withdrawal";
-            detail = item.description || "Bank Withdrawal";
-            xp = Math.floor(item.amount / 15);
-            break;
-          default:
-            action = "Transaction";
-            detail = item.description || "Bank Transaction";
-            xp = 5;
-        }
-        
-        const itemDate = item.purchase_date || item.transaction_date;
-        return {
-          action,
-          detail,
-          xp,
-          amount: item.amount,
-          type: item.type,
-          time: new Date(itemDate).toLocaleDateString()
-        };
-      });
-      
-      setRecentActivity(formattedActivity);
-    })
-    .catch(error => console.error("Error processing transactions:", error));
-  }, []);
-
-  const missions = [
-    {
-      id: 1,
-      title: "Save $50 This Week",
-      description: "Track your spending and save at least $50",
-      xp: 150,
-      difficulty: "Easy",
-      progress: 35,
-      icon: PiggyBank,
-      category: "Saving"
-    },
-    {
-      id: 2,
-      title: "Complete Investing 101",
-      description: "Learn the basics of stock market investing",
-      xp: 200,
-      difficulty: "Medium",
-      progress: 60,
-      icon: LineChart,
-      category: "Education"
-    },
-    {
-      id: 3,
-      title: "Build Emergency Fund",
-      description: "Save 3 months of expenses",
-      xp: 500,
-      difficulty: "Hard",
-      progress: 15,
-      icon: Target,
-      category: "Goal"
-    }
-  ];
+  // missions in state + a separate completed list
+  const [missions, setMissions] = useState(INITIAL_MISSIONS);
+  const [completedMissions, setCompletedMissions] = useState([]);
 
   const achievements = [
     { id: 1, title: "First Steps", unlocked: true, icon: Star },
@@ -190,132 +132,64 @@ export default function FinQuestDashboard() {
     { id: 6, title: "Debt Slayer", unlocked: false, icon: Award }
   ];
 
+  const recentActivity = [
+    { action: "Completed mission", detail: "Daily Budget Check", xp: 50, time: "2h ago" },
+    { action: "Achievement unlocked", detail: "7-Day Streak", xp: 100, time: "5h ago" },
+    { action: "Level up", detail: "Reached Level 12", xp: 0, time: "1d ago" }
+  ];
+
+  // Reward UX + XP apply via engine
   const completeMission = (mission) => {
     setCompletedMission(mission);
     setShowReward(true);
-    setUser(prev => ({
-      ...prev,
-      xp: prev.xp + mission.xp
-    }));
+
+    // apply XP with level-up/overflow logic
+    setUser(prev => applyXP(prev, mission.xp));
     
     setTimeout(() => {
       setShowReward(false);
       setCompletedMission(null);
     }, 3000);
   };
-  
-  const saveBalance = () => {
-    const newBalance = parseFloat(tempBalance) || 0;
-    const previousBalance = user.previousBalances[0]?.balance || user.balance;
-    const changePercent = ((newBalance - previousBalance) / previousBalance * 100).toFixed(1);
-    
-    setUser(prev => ({ 
-      ...prev, 
-      balance: newBalance,
-      previousBalances: [
-        { month: "Oct 2025", balance: newBalance, change: parseFloat(changePercent) },
-        ...prev.previousBalances.slice(0, 3)
-      ]
-    }));
-    setEditingBalance(false);
-  };
 
-  const cancelBalanceEdit = () => {
-    setTempBalance('');
-    setEditingBalance(false);
-  };
+  // guarded claim handler – only works at 100%
+  function claimMission(mission) {
+    if (mission.progress < 100) return;
 
-  const saveSavingsGoal = () => {
-    setUser(prev => ({ 
-      ...prev, 
-      savingsGoal: parseFloat(tempSavingsGoal) || 0,
-      currentSavings: parseFloat(tempCurrentSavings) || 0
-    }));
-    setEditingGoal(false);
-  };
+    // show reward + add XP (which may level up)
+    completeMission(mission);
 
-  const cancelGoalEdit = () => {
-    setTempSavingsGoal('');
-    setTempCurrentSavings('');
-    setEditingGoal(false);
-  };
-  
-  const getFinancialTip = async () => {
-    setLoadingTip(true);
-    setTip("");
-    
-    try {
-      const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
-      const modelName = "gemini-2.5-flash";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-      
-      const userQuery = "Give me one, short, actionable financial tip for a young adult. Make it sound encouraging for my 'Pot o' Gold' app.";
-      const systemPrompt = "You are a friendly financial coach. Provide concise, actionable tips. No more than two sentences.";
-      
-      const payload = {
-        "contents": [{ "parts": [{ "text": userQuery }] }],
-        "tools": [{ "google_search": {} }],
-        "systemInstruction": {
-          "parts": [{ "text": systemPrompt }]
-        }
-      };
-      
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      const data = await response.json();
-      if (data.candidates && data.candidates.length > 0) {
-        const text = data.candidates[0].content.parts[0].text;
-        setTip(text);
-      } else {
-        setTip("Sorry, couldn't get a tip right now. Try again later!");
-      }
-    } catch (error) {
-      console.error("Error fetching financial tip:", error);
-      setTip("Sorry, couldn't get a tip right now. Try again later!");
-    } finally {
-      setLoadingTip(false);
-    }
-  };
+    // move to completed list and replace with next week mission
+    setMissions(prev => {
+      const remaining = prev.filter(m => m.id !== mission.id);
+      return [...remaining, nextWeekMission(mission)];
+    });
+    setCompletedMissions(prev => [
+      { ...mission, completedAt: new Date().toISOString() },
+      ...prev
+    ]);
+  }
 
-  const currentMonthChange = user.previousBalances[0]?.change || 12.5;
   const xpPercentage = (user.xp / user.xpToNext) * 100;
   const savingsPercentage = (user.currentSavings / user.savingsGoal) * 100;
-
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-700 via-green-900 to-emerald-950 text-white">
+      {/* Animated Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           className="absolute top-20 left-10 w-72 h-72 bg-yellow-500 rounded-full mix-blend-multiply filter blur-xl opacity-20"
-          animate={{
-            x: [0, 100, 0],
-            y: [0, 50, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
+          animate={{ x: [0, 100, 0], y: [0, 50, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
           className="absolute bottom-20 right-10 w-96 h-96 bg-green-500 rounded-full mix-blend-multiply filter blur-xl opacity-20"
-          animate={{
-            x: [0, -100, 0],
-            y: [0, -50, 0],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
+          animate={{ x: [0, -100, 0], y: [0, -50, 0] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
+      {/* Header */}
       <motion.header 
         className="relative border-b border-white/10 backdrop-blur-lg bg-white/5"
         initial={{ y: -100 }}
@@ -326,15 +200,11 @@ export default function FinQuestDashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <motion.div 
-                className="w-12 h-12 rounded-xl overflow-hidden bg-green-600 flex items-center justify-center"
+                className="w-12 h-12 rounded-xl overflow-hidden"
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 transition={{ duration: 0.3 }}
               >
-                <img 
-                  src={leprechun}
-                alt="Leprechaun"
-                className="w-full h-full object-cover"
-              />
+                <img src={leprechaun} alt="Leprechaun" className="w-full h-full object-cover" />
               </motion.div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
                 Pot O' Gold
@@ -361,7 +231,9 @@ export default function FinQuestDashboard() {
         </div>
       </motion.header>
 
+      {/* Main Content */}
       <div className="relative max-w-7xl mx-auto px-6 py-8">
+        {/* XP Progress Bar */}
         <motion.div 
           className="mb-8 bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
           initial={{ opacity: 0, y: 20 }}
@@ -387,7 +259,9 @@ export default function FinQuestDashboard() {
         </motion.div>
 
         <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left Column - Stats & Goals */}
           <div className="lg:col-span-1 space-y-6">
+            {/* Balance Card */}
             <motion.div 
               className="bg-gradient-to-br from-yellow-600 to-green-600 rounded-2xl p-6 border border-white/20 shadow-2xl"
               initial={{ opacity: 0, x: -50 }}
@@ -395,104 +269,18 @@ export default function FinQuestDashboard() {
               transition={{ delay: 0.3 }}
               whileHover={{ scale: 1.02 }}
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2 text-yellow-200">
-                  <Wallet className="w-5 h-5" />
-                  <span className="text-sm font-medium">Total Balance</span>
-                </div>
-                {!editingBalance ? (
-                  <motion.button
-                    onClick={() => {
-                      setTempBalance(user.balance.toString());
-                      setEditingBalance(true);
-                    }}
-                    className="p-1 hover:bg-white/20 rounded-lg transition-colors"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </motion.button>
-                ) : (
-                  <div className="flex gap-2">
-                    <motion.button
-                      onClick={saveBalance}
-                      className="p-1 hover:bg-green-500/30 rounded-lg transition-colors"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Check className="w-4 h-4 text-green-300" />
-                    </motion.button>
-                    <motion.button
-                      onClick={cancelBalanceEdit}
-                      className="p-1 hover:bg-red-500/30 rounded-lg transition-colors"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <X className="w-4 h-4 text-red-300" />
-                    </motion.button>
-                  </div>
-                )}
+              <div className="flex items-center gap-2 mb-4 text-yellow-200">
+                <Wallet className="w-5 h-5" />
+                <span className="text-sm font-medium">Total Balance</span>
               </div>
-              
-              {editingBalance ? (
-                <div className="mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-3xl font-bold">$</span>
-                    <input
-                      type="number"
-                      value={tempBalance}
-                      onChange={(e) => setTempBalance(e.target.value)}
-                      className="text-4xl font-bold bg-white/20 rounded-lg px-3 py-1 w-full focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                      step="0.01"
-                      placeholder="0.00"
-                      autoFocus
-                    />
-                  </div>
-                </div>
-              ) : (
-                <p className="text-4xl font-bold mb-2">${user.balance.toFixed(2)}</p>
-              )}
-              
-              <div className={`flex items-center gap-2 ${currentMonthChange >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+              <p className="text-4xl font-bold mb-2">${user.balance.toFixed(2)}</p>
+              <div className="flex items-center gap-2 text-green-300">
                 <TrendingUp className="w-4 h-4" />
-                <span className="text-sm">{currentMonthChange >= 0 ? '+' : ''}{currentMonthChange}% this month</span>
+                <span className="text-sm">+12.5% this month</span>
               </div>
             </motion.div>
 
-            <motion.div 
-              className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
-              initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.35 }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <LineChart className="w-5 h-5 text-blue-400" />
-                <span className="font-semibold">Balance History</span>
-              </div>
-              <div className="space-y-3">
-                {user.previousBalances.map((entry, idx) => (
-                  <motion.div
-                    key={idx}
-                    className="flex items-center justify-between py-2 border-b border-white/10 last:border-0"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4 + idx * 0.05 }}
-                  >
-                    <div>
-                      <p className="text-sm text-gray-400">{entry.month}</p>
-                      <p className="font-semibold">${entry.balance.toFixed(2)}</p>
-                    </div>
-                    <div className={`flex items-center gap-1 text-sm font-semibold ${
-                      entry.change >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      <TrendingUp className={`w-4 h-4 ${entry.change < 0 ? 'rotate-180' : ''}`} />
-                      <span>{entry.change >= 0 ? '+' : ''}{entry.change}%</span>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-
+            {/* Savings Goal */}
             <motion.div 
               className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
               initial={{ opacity: 0, x: -50 }}
@@ -504,92 +292,21 @@ export default function FinQuestDashboard() {
                   <Target className="w-5 h-5 text-green-400" />
                   <span className="font-semibold">Savings Goal</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-300">{savingsPercentage.toFixed(0)}%</span>
-                  {!editingGoal ? (
-                    <motion.button
-                      onClick={() => {
-                        setTempCurrentSavings(user.currentSavings.toString());
-                        setTempSavingsGoal(user.savingsGoal.toString());
-                        setEditingGoal(true);
-                      }}
-                      className="p-1 hover:bg-white/20 rounded-lg transition-colors"
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </motion.button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <motion.button
-                        onClick={saveSavingsGoal}
-                        className="p-1 hover:bg-green-500/30 rounded-lg transition-colors"
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        <Check className="w-4 h-4 text-green-300" />
-                      </motion.button>
-                      <motion.button
-                        onClick={cancelGoalEdit}
-                        className="p-1 hover:bg-red-500/30 rounded-lg transition-colors"
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        <X className="w-4 h-4 text-red-300" />
-                      </motion.button>
-                    </div>
-                  )}
-                </div>
+                <span className="text-sm text-gray-300">{((user.currentSavings / user.savingsGoal) * 100).toFixed(0)}%</span>
               </div>
-              
-              {editingGoal ? (
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Current Savings</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl font-bold">$</span>
-                      <input
-                        type="number"
-                        value={tempCurrentSavings}
-                        onChange={(e) => setTempCurrentSavings(e.target.value)}
-                        className="text-2xl font-bold bg-white/20 rounded-lg px-3 py-1 w-full focus:outline-none focus:ring-2 focus:ring-green-400"
-                        step="0.01"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">Goal Amount</label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl font-bold">$</span>
-                      <input
-                        type="number"
-                        value={tempSavingsGoal}
-                        onChange={(e) => setTempSavingsGoal(e.target.value)}
-                        className="text-xl font-bold bg-white/20 rounded-lg px-3 py-1 w-full focus:outline-none focus:ring-2 focus:ring-green-400"
-                        step="0.01"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold mb-2">${user.currentSavings}</p>
-                  <p className="text-sm text-gray-400 mb-4">of ${user.savingsGoal} goal</p>
-                </>
-              )}
-              
+              <p className="text-2xl font-bold mb-2">${user.currentSavings}</p>
+              <p className="text-sm text-gray-400 mb-4">of ${user.savingsGoal} goal</p>
               <div className="relative h-3 bg-black/30 rounded-full overflow-hidden">
                 <motion.div 
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-400 to-emerald-500"
                   initial={{ width: 0 }}
-                  animate={{ width: `${savingsPercentage}%` }}
+                  animate={{ width: `${(user.currentSavings / user.savingsGoal) * 100}%` }}
                   transition={{ duration: 1, delay: 0.5 }}
                 />
               </div>
             </motion.div>
 
+            {/* Achievements Preview */}
             <motion.div 
               className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
               initial={{ opacity: 0, x: -50 }}
@@ -604,13 +321,18 @@ export default function FinQuestDashboard() {
                 <span className="text-sm text-gray-300">3/6</span>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                {achievements.map((achievement, idx) => (
+                {[
+                  { id: 1, title: "First Steps", unlocked: true, icon: Star },
+                  { id: 2, title: "Savings Master", unlocked: true, icon: PiggyBank },
+                  { id: 3, title: "7-Day Streak", unlocked: true, icon: Flame },
+                  { id: 4, title: "Investment Guru", unlocked: false, icon: TrendingUp },
+                  { id: 5, title: "Budget Boss", unlocked: false, icon: Wallet },
+                  { id: 6, title: "Debt Slayer", unlocked: false, icon: Award }
+                ].map((achievement, idx) => (
                   <motion.div
                     key={achievement.id}
                     className={`aspect-square rounded-xl flex items-center justify-center ${
-                      achievement.unlocked 
-                        ? 'bg-gradient-to-br from-yellow-400 to-orange-500' 
-                        : 'bg-black/30'
+                      achievement.unlocked ? 'bg-gradient-to-br from-yellow-400 to-orange-500' : 'bg-black/30'
                     }`}
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
@@ -628,88 +350,110 @@ export default function FinQuestDashboard() {
             </motion.div>
           </div>
 
+          {/* Middle Column - Active Missions */}
           <div className="lg:col-span-2 space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
               <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
                 <Target className="w-6 h-6 text-purple-400" />
                 Active Missions
               </h2>
               
               <div className="space-y-4">
-                {missions.map((mission, idx) => (
-                  <motion.div
-                    key={mission.id}
-                    className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hover:border-purple-400 transition-colors cursor-pointer"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 + idx * 0.1 }}
-                    whileHover={{ scale: 1.02 }}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-start gap-4 flex-1">
-                        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                          <mission.icon className="w-6 h-6" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-lg">{mission.title}</h3>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              mission.difficulty === 'Easy' ? 'bg-green-500/20 text-green-300' :
-                              mission.difficulty === 'Medium' ? 'bg-yellow-500/20 text-yellow-300' :
-                              'bg-red-500/20 text-red-300'
-                            }`}>
-                              {mission.difficulty}
-                            </span>
+                {missions.map((mission, idx) => {
+                  const isComplete = mission.progress >= 100;
+
+                  return (
+                    <motion.div
+                      key={mission.id}
+                      className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hover:border-purple-400 transition-colors cursor-pointer"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4 + idx * 0.1 }}
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-start gap-4 flex-1">
+                          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <mission.icon className="w-6 h-6" />
                           </div>
-                          <p className="text-sm text-gray-400 mb-3">{mission.description}</p>
-                          
-                          <div className="flex items-center gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between text-xs mb-1">
-                                <span className="text-gray-400">Progress</span>
-                                <span className="text-gray-300">{mission.progress}%</span>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-semibold text-lg">{mission.title}</h3>
+                              <span className={`text-xs px-2 py-1 rounded-full ${
+                                mission.difficulty === 'Easy' ? 'bg-green-500/20 text-green-300' :
+                                mission.difficulty === 'Medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                                'bg-red-500/20 text-red-300'
+                              }`}>
+                                {mission.difficulty}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-400 mb-3">{mission.description}</p>
+                            
+                            <div className="flex items-center gap-4">
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="text-gray-400">Progress</span>
+                                  <span className="text-gray-300">{mission.progress}%</span>
+                                </div>
+                                <div className="h-2 bg-black/30 rounded-full overflow-hidden">
+                                  <motion.div
+                                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${Math.min(mission.progress, 100)}%` }}
+                                    transition={{ duration: 1, delay: 0.5 + idx * 0.1 }}
+                                  />
+                                </div>
                               </div>
-                              <div className="h-2 bg-black/30 rounded-full overflow-hidden">
-                                <motion.div
-                                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
-                                  initial={{ width: 0 }}
-                                  animate={{ width: `${mission.progress}%` }}
-                                  transition={{ duration: 1, delay: 0.5 + idx * 0.1 }}
-                                />
+                              <div className="flex items-center gap-1 text-yellow-400 font-semibold">
+                                <Zap className="w-4 h-4" />
+                                <span>{mission.xp} XP</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 text-yellow-400 font-semibold">
-                              <Zap className="w-4 h-4" />
-                              <span>{mission.xp} XP</span>
-                            </div>
                           </div>
                         </div>
+                        
+                        <motion.button
+                          className={`ml-4 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg
+                            ${isComplete ? "bg-gradient-to-r from-purple-500 to-pink-500" : "bg-gray-500 cursor-not-allowed"}`}
+                          whileHover={isComplete ? { scale: 1.05 } : undefined}
+                          whileTap={isComplete ? { scale: 0.95 } : undefined}
+                          disabled={!isComplete}
+                          onClick={() => isComplete && claimMission(mission)}
+                        >
+                          {isComplete ? "Claim" : "Continue"}
+                          <ChevronRight className="w-4 h-4" />
+                        </motion.button>
                       </div>
-                      
-                      <motion.button
-                        className="ml-4 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => completeMission(mission)}
-                      >
-                        Continue
-                        <ChevronRight className="w-4 h-4" />
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-            >
+            {/* Completed Missions preview (simple) */}
+            {completedMissions.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+                <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                  <Check className="w-6 h-6 text-green-400" />
+                  Completed Missions
+                </h2>
+                <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                  <ul className="space-y-3">
+                    {completedMissions.map((m) => (
+                      <li key={m.id} className="flex items-center justify-between">
+                        <span className="text-sm">{m.title}</span>
+                        <span className="text-yellow-300 font-semibold flex items-center gap-1">
+                          <Zap className="w-4 h-4" /> +{m.xp} XP
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Recent Activity */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
               <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
                 <Star className="w-6 h-6 text-yellow-400" />
                 Recent Activity
@@ -726,20 +470,8 @@ export default function FinQuestDashboard() {
                       transition={{ delay: 0.8 + idx * 0.1 }}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          activity.type === 'deposit'
-                            ? 'bg-gradient-to-br from-green-500 to-emerald-500'
-                            : activity.type === 'withdrawal'
-                              ? 'bg-gradient-to-br from-orange-500 to-amber-500'
-                              : 'bg-gradient-to-br from-red-500 to-pink-500'
-                        }`}>
-                          {activity.type === 'deposit' ? (
-                            <DollarSign className="w-5 h-5" />
-                          ) : activity.type === 'withdrawal' ? (
-                            <Wallet className="w-5 h-5" />
-                          ) : (
-                            <PiggyBank className="w-5 h-5" />
-                          )}
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                          <Check className="w-5 h-5" />
                         </div>
                         <div>
                           <p className="font-medium">{activity.action}</p>
@@ -747,13 +479,6 @@ export default function FinQuestDashboard() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className={`font-semibold ${
-                          activity.type === 'deposit'
-                            ? 'text-green-400'
-                            : 'text-red-400'
-                        }`}>
-                          {activity.type === 'deposit' ? '+' : '-'}${activity.amount?.toFixed(2) || '0.00'}
-                        </p>
                         {activity.xp > 0 && (
                           <p className="text-yellow-400 font-semibold">+{activity.xp} XP</p>
                         )}
@@ -763,45 +488,12 @@ export default function FinQuestDashboard() {
                   ))}
                 </div>
               </div>
-              
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.9 }}
-                className="mt-6 bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
-              >
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-yellow-400" />
-                  Financial Tip of the Day
-                </h3>
-                
-                <div className="flex flex-col items-center">
-                  <motion.button
-                    className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg mb-4"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={getFinancialTip}
-                    disabled={loadingTip}
-                  >
-                    {loadingTip ? "Getting Tip..." : "Get Tip of the Day"}
-                  </motion.button>
-                  
-                  {tip && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white/20 p-4 rounded-xl text-center text-white"
-                    >
-                      {tip}
-                    </motion.div>
-                  )}
-                </div>
-              </motion.div>
             </motion.div>
           </div>
         </div>
       </div>
 
+      {/* Reward Animation */}
       <AnimatePresence>
         {showReward && completedMission && (
           <motion.div
@@ -818,15 +510,8 @@ export default function FinQuestDashboard() {
               transition={{ type: "spring", duration: 0.5 }}
             >
               <motion.div
-                animate={{ 
-                  scale: [1, 1.2, 1],
-                  rotate: [0, 360, 0]
-                }}
-                transition={{ 
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
+                animate={{ scale: [1, 1.2, 1], rotate: [0, 360, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center"
               >
                 <Trophy className="w-12 h-12 text-white" />
