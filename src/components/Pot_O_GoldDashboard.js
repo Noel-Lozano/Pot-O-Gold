@@ -28,6 +28,8 @@ export default function FinQuestDashboard() {
   const [completedMission, setCompletedMission] = useState(null);
   const [showReward, setShowReward] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
+  const [tip, setTip] = useState("");
+  const [loadingTip, setLoadingTip] = useState(false);
   
   useEffect(() => {
     // Fetch account balance
@@ -41,21 +43,103 @@ export default function FinQuestDashboard() {
       })
       .catch(error => console.error("Error fetching balance:", error));
 
-    // Fetch recent activity (deposits)
-    fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/deposits?key=${API_KEY}`)
-      .then(response => response.json())
-      .then(data => {
-        // Format the API response to match the UI requirements
-        const formattedActivity = data.map(item => ({
-          action: "Deposit",
-          detail: item.description || "Bank Deposit",
-          xp: Math.floor(item.amount / 10), // Generate some XP based on deposit amount
-          time: new Date(item.transaction_date).toLocaleDateString()
-        }));
+    // Fetch all transaction types in parallel
+    Promise.all([
+      // Fetch purchases
+      fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/purchases?key=${API_KEY}`)
+        .then(response => response.json())
+        .catch(error => {
+          console.error("Error fetching purchases:", error);
+          return [];
+        }),
+      
+      // Fetch deposits
+      fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/deposits?key=${API_KEY}`)
+        .then(response => response.json())
+        .catch(error => {
+          console.error("Error fetching deposits:", error);
+          return [];
+        }),
+      
+      // Fetch withdrawals
+      fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/withdrawals?key=${API_KEY}`)
+        .then(response => response.json())
+        .catch(error => {
+          console.error("Error fetching withdrawals:", error);
+          return [];
+        })
+    ])
+    .then(([purchases, deposits, withdrawals]) => {
+      // Add type identifiers to each transaction
+      const typedPurchases = purchases.map(item => ({
+        ...item,
+        type: 'purchase'
+      }));
+      
+      const typedDeposits = deposits.map(item => ({
+        ...item,
+        type: 'deposit'
+      }));
+      
+      const typedWithdrawals = withdrawals.map(item => ({
+        ...item,
+        type: 'withdrawal'
+      }));
+      
+      // Combine all transactions
+      const allTransactions = [
+        ...typedPurchases,
+        ...typedDeposits,
+        ...typedWithdrawals
+      ];
+      
+      // Sort by transaction date (newest first)
+      allTransactions.sort((a, b) => {
+        const dateA = a.purchase_date || a.transaction_date;
+        const dateB = b.purchase_date || b.transaction_date;
+        return new Date(dateB) - new Date(dateA);
+      });
+      
+      // Format the transactions for the UI
+      const formattedActivity = allTransactions.map(item => {
+        let action, detail, xp;
         
-        setRecentActivity(formattedActivity);
-      })
-      .catch(error => console.error("Error fetching deposits:", error));
+        switch(item.type) {
+          case 'purchase':
+            action = "Purchase";
+            detail = item.description || "Purchase";
+            xp = Math.floor(item.amount / 20); // Less XP for spending
+            break;
+          case 'deposit':
+            action = "Deposit";
+            detail = item.description || "Bank Deposit";
+            xp = Math.floor(item.amount / 10); // More XP for saving
+            break;
+          case 'withdrawal':
+            action = "Withdrawal";
+            detail = item.description || "Bank Withdrawal";
+            xp = Math.floor(item.amount / 15); // Medium XP for withdrawals
+            break;
+          default:
+            action = "Transaction";
+            detail = item.description || "Bank Transaction";
+            xp = 5;
+        }
+        
+        const itemDate = item.purchase_date || item.transaction_date;
+        return {
+          action,
+          detail,
+          xp,
+          amount: item.amount,
+          type: item.type,
+          time: new Date(itemDate).toLocaleDateString()
+        };
+      });
+      
+      setRecentActivity(formattedActivity);
+    })
+    .catch(error => console.error("Error processing transactions:", error));
   }, []); // Empty dependency array means this runs once on component mount
 
   const missions = [
@@ -113,6 +197,55 @@ export default function FinQuestDashboard() {
       setShowReward(false);
       setCompletedMission(null);
     }, 3000);
+  };
+  
+  const getFinancialTip = async () => {
+
+    setLoadingTip(true);
+    setTip("");
+    
+    try {
+      // Get the API key from environment variables
+      const apiKey =  process.env.REACT_APP_GEMINI_API_KEY;
+      const modelName = "gemini-2.5-flash";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      
+      // Set up prompts
+      const userQuery = "Give me one, short, actionable financial tip for a young adult. Make it sound encouraging for my 'Pot o' Gold' app.";
+      const systemPrompt = "You are a friendly financial coach. Provide concise, actionable tips. No more than two sentences.";
+      
+      // Set up payload
+      const payload = {
+        "contents": [{ "parts": [{ "text": userQuery }] }],
+        "tools": [{ "google_search": {} }],
+        "systemInstruction": {
+          "parts": [{ "text": systemPrompt }]
+        }
+      };
+      
+      // Make the fetch call
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      // Handle response
+      const data = await response.json();
+      if (data.candidates && data.candidates.length > 0) {
+        const text = data.candidates[0].content.parts[0].text;
+        setTip(text);
+      } else {
+        setTip("Sorry, couldn't get a tip right now. Try again later!");
+      }
+    } catch (error) {
+      console.error("Error fetching financial tip:", error);
+      setTip("Sorry, couldn't get a tip right now. Try again later!");
+    } finally {
+      setLoadingTip(false);
+    }
   };
 
   const xpPercentage = (user.xp / user.xpToNext) * 100;
@@ -408,8 +541,20 @@ export default function FinQuestDashboard() {
                       transition={{ delay: 0.8 + idx * 0.1 }}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                          <Check className="w-5 h-5" />
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          activity.type === 'deposit'
+                            ? 'bg-gradient-to-br from-green-500 to-emerald-500'
+                            : activity.type === 'withdrawal'
+                              ? 'bg-gradient-to-br from-orange-500 to-amber-500'
+                              : 'bg-gradient-to-br from-red-500 to-pink-500'
+                        }`}>
+                          {activity.type === 'deposit' ? (
+                            <DollarSign className="w-5 h-5" />
+                          ) : activity.type === 'withdrawal' ? (
+                            <Wallet className="w-5 h-5" />
+                          ) : (
+                            <PiggyBank className="w-5 h-5" />
+                          )}
                         </div>
                         <div>
                           <p className="font-medium">{activity.action}</p>
@@ -417,6 +562,13 @@ export default function FinQuestDashboard() {
                         </div>
                       </div>
                       <div className="text-right">
+                        <p className={`font-semibold ${
+                          activity.type === 'deposit'
+                            ? 'text-green-400'
+                            : 'text-red-400'
+                        }`}>
+                          {activity.type === 'deposit' ? '+' : '-'}${activity.amount?.toFixed(2) || '0.00'}
+                        </p>
                         {activity.xp > 0 && (
                           <p className="text-yellow-400 font-semibold">+{activity.xp} XP</p>
                         )}
@@ -426,6 +578,41 @@ export default function FinQuestDashboard() {
                   ))}
                 </div>
               </div>
+              
+              {/* Financial Tip of the Day */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9 }}
+                className="mt-6 bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
+              >
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-yellow-400" />
+                  Financial Tip of the Day
+                </h3>
+                
+                <div className="flex flex-col items-center">
+                  <motion.button
+                    className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg mb-4"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={getFinancialTip}
+                    disabled={loadingTip}
+                  >
+                    {loadingTip ? "Getting Tip..." : "Get Tip of the Day"}
+                  </motion.button>
+                  
+                  {tip && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white/20 p-4 rounded-xl text-center text-white"
+                    >
+                      {tip}
+                    </motion.div>
+                  )}
+                </div>
+              </motion.div>
             </motion.div>
           </div>
         </div>
