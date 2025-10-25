@@ -5,7 +5,7 @@ import { Mail, Lock, LogIn, Zap } from 'lucide-react';
 import { signIn } from './mockAuthFunctions';
 import leprechaun from '../assets/leprechaun.jpg';
 
-const LoginForm = ({ onLoginSuccess }) => {
+const LoginForm = ({ onLoginSuccess, onSignUp }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -189,11 +189,29 @@ const LoginForm = ({ onLoginSuccess }) => {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-500/50 rounded-full px-4 py-2 text-sm">
+            <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-500/50 rounded-full px-4 py-2 text-sm mb-4">
               <Zap className="w-4 h-4 text-yellow-400" />
               <span className="text-purple-300">Daily login bonus: +50 XP</span>
             </div>
           </motion.div>
+
+          {/* Sign Up Link */}
+          {onSignUp && (
+            <motion.div
+              className="mt-4 text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.7 }}
+            >
+              <button
+                type="button"
+                onClick={onSignUp}
+                className="text-sm text-gray-300 hover:text-yellow-400 transition"
+              >
+                Don't have an account? <span className="font-semibold">Sign up</span>
+              </button>
+            </motion.div>
+          )}
         </div>
 
         {/* Decorative Elements */}
