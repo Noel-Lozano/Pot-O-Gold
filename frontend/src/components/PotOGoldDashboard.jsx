@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Trophy, Zap, Target, TrendingUp, Book, Wallet, 
+import {
+  Trophy, Zap, Target, TrendingUp, Wallet,
   Star, Award, Flame, ChevronRight, Lock, Check,
-  DollarSign, PiggyBank, LineChart, Users, Gift
+  PiggyBank, LineChart
 } from 'lucide-react';
+
 import leprechaun from '../assets/leprechaun.jpg';
 
 /** ----- Seed missions (used to init state) ----- */
@@ -115,7 +116,7 @@ export default function FinQuestDashboard() {
     currentSavings: 1850
   });
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // const [activeTab, setActiveTab] = useState('dashboard');
   const [completedMission, setCompletedMission] = useState(null);
   const [showReward, setShowReward] = useState(false);
 
