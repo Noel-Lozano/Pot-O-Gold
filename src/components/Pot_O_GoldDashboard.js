@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Zap, Target, TrendingUp, Book, Wallet,
   Star, Award, Flame, ChevronRight, Lock, Check,
-  DollarSign, PiggyBank, LineChart, Users, Gift
+  DollarSign, PiggyBank, LineChart, Users, Gift, Edit2, X
 } from 'lucide-react';
-import leprechaun from '../assets/leprechaun.jpg';
+import leprechun from '../assets/leprechaun.jpg';
 
 // API Constants
 const API_KEY = "787076b59b64a9f0732ca97ca6267bdf";
@@ -21,7 +21,13 @@ export default function FinQuestDashboard() {
     streak: 7,
     balance: 1240.50,
     savingsGoal: 5000,
-    currentSavings: 1850
+    currentSavings: 1850,
+    previousBalances: [
+      { month: "Sep 2025", balance: 1150.00, change: 8.5 },
+      { month: "Aug 2025", balance: 1060.00, change: 5.2 },
+      { month: "Jul 2025", balance: 1007.50, change: -2.1 },
+      { month: "Jun 2025", balance: 1029.20, change: 12.3 }
+    ]
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -30,6 +36,13 @@ export default function FinQuestDashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [tip, setTip] = useState("");
   const [loadingTip, setLoadingTip] = useState(false);
+  
+  // Edit state
+  const [editingBalance, setEditingBalance] = useState(false);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [tempBalance, setTempBalance] = useState('');
+  const [tempSavingsGoal, setTempSavingsGoal] = useState('');
+  const [tempCurrentSavings, setTempCurrentSavings] = useState('');
   
   useEffect(() => {
     // Fetch account balance
@@ -45,7 +58,6 @@ export default function FinQuestDashboard() {
 
     // Fetch all transaction types in parallel
     Promise.all([
-      // Fetch purchases
       fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/purchases?key=${API_KEY}`)
         .then(response => response.json())
         .catch(error => {
@@ -53,7 +65,6 @@ export default function FinQuestDashboard() {
           return [];
         }),
       
-      // Fetch deposits
       fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/deposits?key=${API_KEY}`)
         .then(response => response.json())
         .catch(error => {
@@ -61,7 +72,6 @@ export default function FinQuestDashboard() {
           return [];
         }),
       
-      // Fetch withdrawals
       fetch(`http://api.nessieisreal.com/accounts/${PAT_CHECKING}/withdrawals?key=${API_KEY}`)
         .then(response => response.json())
         .catch(error => {
@@ -70,7 +80,6 @@ export default function FinQuestDashboard() {
         })
     ])
     .then(([purchases, deposits, withdrawals]) => {
-      // Add type identifiers to each transaction
       const typedPurchases = purchases.map(item => ({
         ...item,
         type: 'purchase'
@@ -86,21 +95,18 @@ export default function FinQuestDashboard() {
         type: 'withdrawal'
       }));
       
-      // Combine all transactions
       const allTransactions = [
         ...typedPurchases,
         ...typedDeposits,
         ...typedWithdrawals
       ];
       
-      // Sort by transaction date (newest first)
       allTransactions.sort((a, b) => {
         const dateA = a.purchase_date || a.transaction_date;
         const dateB = b.purchase_date || b.transaction_date;
         return new Date(dateB) - new Date(dateA);
       });
       
-      // Format the transactions for the UI
       const formattedActivity = allTransactions.map(item => {
         let action, detail, xp;
         
@@ -108,17 +114,17 @@ export default function FinQuestDashboard() {
           case 'purchase':
             action = "Purchase";
             detail = item.description || "Purchase";
-            xp = Math.floor(item.amount / 20); // Less XP for spending
+            xp = Math.floor(item.amount / 20);
             break;
           case 'deposit':
             action = "Deposit";
             detail = item.description || "Bank Deposit";
-            xp = Math.floor(item.amount / 10); // More XP for saving
+            xp = Math.floor(item.amount / 10);
             break;
           case 'withdrawal':
             action = "Withdrawal";
             detail = item.description || "Bank Withdrawal";
-            xp = Math.floor(item.amount / 15); // Medium XP for withdrawals
+            xp = Math.floor(item.amount / 15);
             break;
           default:
             action = "Transaction";
@@ -140,7 +146,7 @@ export default function FinQuestDashboard() {
       setRecentActivity(formattedActivity);
     })
     .catch(error => console.error("Error processing transactions:", error));
-  }, []); // Empty dependency array means this runs once on component mount
+  }, []);
 
   const missions = [
     {
@@ -184,7 +190,6 @@ export default function FinQuestDashboard() {
     { id: 6, title: "Debt Slayer", unlocked: false, icon: Award }
   ];
 
-
   const completeMission = (mission) => {
     setCompletedMission(mission);
     setShowReward(true);
@@ -199,22 +204,54 @@ export default function FinQuestDashboard() {
     }, 3000);
   };
   
-  const getFinancialTip = async () => {
+  const saveBalance = () => {
+    const newBalance = parseFloat(tempBalance) || 0;
+    const previousBalance = user.previousBalances[0]?.balance || user.balance;
+    const changePercent = ((newBalance - previousBalance) / previousBalance * 100).toFixed(1);
+    
+    setUser(prev => ({ 
+      ...prev, 
+      balance: newBalance,
+      previousBalances: [
+        { month: "Oct 2025", balance: newBalance, change: parseFloat(changePercent) },
+        ...prev.previousBalances.slice(0, 3)
+      ]
+    }));
+    setEditingBalance(false);
+  };
 
+  const cancelBalanceEdit = () => {
+    setTempBalance('');
+    setEditingBalance(false);
+  };
+
+  const saveSavingsGoal = () => {
+    setUser(prev => ({ 
+      ...prev, 
+      savingsGoal: parseFloat(tempSavingsGoal) || 0,
+      currentSavings: parseFloat(tempCurrentSavings) || 0
+    }));
+    setEditingGoal(false);
+  };
+
+  const cancelGoalEdit = () => {
+    setTempSavingsGoal('');
+    setTempCurrentSavings('');
+    setEditingGoal(false);
+  };
+  
+  const getFinancialTip = async () => {
     setLoadingTip(true);
     setTip("");
     
     try {
-      // Get the API key from environment variables
-      const apiKey =  process.env.REACT_APP_GEMINI_API_KEY;
+      const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
       const modelName = "gemini-2.5-flash";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
       
-      // Set up prompts
       const userQuery = "Give me one, short, actionable financial tip for a young adult. Make it sound encouraging for my 'Pot o' Gold' app.";
       const systemPrompt = "You are a friendly financial coach. Provide concise, actionable tips. No more than two sentences.";
       
-      // Set up payload
       const payload = {
         "contents": [{ "parts": [{ "text": userQuery }] }],
         "tools": [{ "google_search": {} }],
@@ -223,7 +260,6 @@ export default function FinQuestDashboard() {
         }
       };
       
-      // Make the fetch call
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -232,7 +268,6 @@ export default function FinQuestDashboard() {
         body: JSON.stringify(payload)
       });
       
-      // Handle response
       const data = await response.json();
       if (data.candidates && data.candidates.length > 0) {
         const text = data.candidates[0].content.parts[0].text;
@@ -248,12 +283,12 @@ export default function FinQuestDashboard() {
     }
   };
 
+  const currentMonthChange = user.previousBalances[0]?.change || 12.5;
   const xpPercentage = (user.xp / user.xpToNext) * 100;
   const savingsPercentage = (user.currentSavings / user.savingsGoal) * 100;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-700 via-green-900 to-emerald-950 text-white">
-      {/* Animated Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <motion.div
           className="absolute top-20 left-10 w-72 h-72 bg-yellow-500 rounded-full mix-blend-multiply filter blur-xl opacity-20"
@@ -281,7 +316,6 @@ export default function FinQuestDashboard() {
         />
       </div>
 
-      {/* Header */}
       <motion.header 
         className="relative border-b border-white/10 backdrop-blur-lg bg-white/5"
         initial={{ y: -100 }}
@@ -292,15 +326,15 @@ export default function FinQuestDashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <motion.div 
-                className="w-12 h-12 rounded-xl overflow-hidden"
+                className="w-12 h-12 rounded-xl overflow-hidden bg-green-600 flex items-center justify-center"
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 transition={{ duration: 0.3 }}
               >
                 <img 
-                  src={leprechaun}
-                  alt="Leprechaun"
-                  className="w-full h-full object-cover"
-                />
+                  src={leprechun}
+                alt="Leprechaun"
+                className="w-full h-full object-cover"
+              />
               </motion.div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
                 Pot O' Gold
@@ -327,9 +361,7 @@ export default function FinQuestDashboard() {
         </div>
       </motion.header>
 
-      {/* Main Content */}
       <div className="relative max-w-7xl mx-auto px-6 py-8">
-        {/* XP Progress Bar */}
         <motion.div 
           className="mb-8 bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
           initial={{ opacity: 0, y: 20 }}
@@ -355,9 +387,7 @@ export default function FinQuestDashboard() {
         </motion.div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column - Stats & Goals */}
           <div className="lg:col-span-1 space-y-6">
-            {/* Balance Card */}
             <motion.div 
               className="bg-gradient-to-br from-yellow-600 to-green-600 rounded-2xl p-6 border border-white/20 shadow-2xl"
               initial={{ opacity: 0, x: -50 }}
@@ -365,18 +395,104 @@ export default function FinQuestDashboard() {
               transition={{ delay: 0.3 }}
               whileHover={{ scale: 1.02 }}
             >
-              <div className="flex items-center gap-2 mb-4 text-yellow-200">
-                <Wallet className="w-5 h-5" />
-                <span className="text-sm font-medium">Total Balance</span>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-yellow-200">
+                  <Wallet className="w-5 h-5" />
+                  <span className="text-sm font-medium">Total Balance</span>
+                </div>
+                {!editingBalance ? (
+                  <motion.button
+                    onClick={() => {
+                      setTempBalance(user.balance.toString());
+                      setEditingBalance(true);
+                    }}
+                    className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </motion.button>
+                ) : (
+                  <div className="flex gap-2">
+                    <motion.button
+                      onClick={saveBalance}
+                      className="p-1 hover:bg-green-500/30 rounded-lg transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Check className="w-4 h-4 text-green-300" />
+                    </motion.button>
+                    <motion.button
+                      onClick={cancelBalanceEdit}
+                      className="p-1 hover:bg-red-500/30 rounded-lg transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <X className="w-4 h-4 text-red-300" />
+                    </motion.button>
+                  </div>
+                )}
               </div>
-              <p className="text-4xl font-bold mb-2">${user.balance.toFixed(2)}</p>
-              <div className="flex items-center gap-2 text-green-300">
+              
+              {editingBalance ? (
+                <div className="mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-3xl font-bold">$</span>
+                    <input
+                      type="number"
+                      value={tempBalance}
+                      onChange={(e) => setTempBalance(e.target.value)}
+                      className="text-4xl font-bold bg-white/20 rounded-lg px-3 py-1 w-full focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      step="0.01"
+                      placeholder="0.00"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-4xl font-bold mb-2">${user.balance.toFixed(2)}</p>
+              )}
+              
+              <div className={`flex items-center gap-2 ${currentMonthChange >= 0 ? 'text-green-300' : 'text-red-300'}`}>
                 <TrendingUp className="w-4 h-4" />
-                <span className="text-sm">+12.5% this month</span>
+                <span className="text-sm">{currentMonthChange >= 0 ? '+' : ''}{currentMonthChange}% this month</span>
               </div>
             </motion.div>
 
-            {/* Savings Goal */}
+            <motion.div 
+              className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.35 }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <LineChart className="w-5 h-5 text-blue-400" />
+                <span className="font-semibold">Balance History</span>
+              </div>
+              <div className="space-y-3">
+                {user.previousBalances.map((entry, idx) => (
+                  <motion.div
+                    key={idx}
+                    className="flex items-center justify-between py-2 border-b border-white/10 last:border-0"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 + idx * 0.05 }}
+                  >
+                    <div>
+                      <p className="text-sm text-gray-400">{entry.month}</p>
+                      <p className="font-semibold">${entry.balance.toFixed(2)}</p>
+                    </div>
+                    <div className={`flex items-center gap-1 text-sm font-semibold ${
+                      entry.change >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      <TrendingUp className={`w-4 h-4 ${entry.change < 0 ? 'rotate-180' : ''}`} />
+                      <span>{entry.change >= 0 ? '+' : ''}{entry.change}%</span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+
             <motion.div 
               className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
               initial={{ opacity: 0, x: -50 }}
@@ -388,10 +504,82 @@ export default function FinQuestDashboard() {
                   <Target className="w-5 h-5 text-green-400" />
                   <span className="font-semibold">Savings Goal</span>
                 </div>
-                <span className="text-sm text-gray-300">{savingsPercentage.toFixed(0)}%</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-300">{savingsPercentage.toFixed(0)}%</span>
+                  {!editingGoal ? (
+                    <motion.button
+                      onClick={() => {
+                        setTempCurrentSavings(user.currentSavings.toString());
+                        setTempSavingsGoal(user.savingsGoal.toString());
+                        setEditingGoal(true);
+                      }}
+                      className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </motion.button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <motion.button
+                        onClick={saveSavingsGoal}
+                        className="p-1 hover:bg-green-500/30 rounded-lg transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        <Check className="w-4 h-4 text-green-300" />
+                      </motion.button>
+                      <motion.button
+                        onClick={cancelGoalEdit}
+                        className="p-1 hover:bg-red-500/30 rounded-lg transition-colors"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        <X className="w-4 h-4 text-red-300" />
+                      </motion.button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <p className="text-2xl font-bold mb-2">${user.currentSavings}</p>
-              <p className="text-sm text-gray-400 mb-4">of ${user.savingsGoal} goal</p>
+              
+              {editingGoal ? (
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Current Savings</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-bold">$</span>
+                      <input
+                        type="number"
+                        value={tempCurrentSavings}
+                        onChange={(e) => setTempCurrentSavings(e.target.value)}
+                        className="text-2xl font-bold bg-white/20 rounded-lg px-3 py-1 w-full focus:outline-none focus:ring-2 focus:ring-green-400"
+                        step="0.01"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">Goal Amount</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl font-bold">$</span>
+                      <input
+                        type="number"
+                        value={tempSavingsGoal}
+                        onChange={(e) => setTempSavingsGoal(e.target.value)}
+                        className="text-xl font-bold bg-white/20 rounded-lg px-3 py-1 w-full focus:outline-none focus:ring-2 focus:ring-green-400"
+                        step="0.01"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold mb-2">${user.currentSavings}</p>
+                  <p className="text-sm text-gray-400 mb-4">of ${user.savingsGoal} goal</p>
+                </>
+              )}
+              
               <div className="relative h-3 bg-black/30 rounded-full overflow-hidden">
                 <motion.div 
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-green-400 to-emerald-500"
@@ -402,7 +590,6 @@ export default function FinQuestDashboard() {
               </div>
             </motion.div>
 
-            {/* Achievements Preview */}
             <motion.div 
               className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
               initial={{ opacity: 0, x: -50 }}
@@ -441,7 +628,6 @@ export default function FinQuestDashboard() {
             </motion.div>
           </div>
 
-          {/* Middle Column - Active Missions */}
           <div className="lg:col-span-2 space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -519,7 +705,6 @@ export default function FinQuestDashboard() {
               </div>
             </motion.div>
 
-            {/* Recent Activity */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -579,7 +764,6 @@ export default function FinQuestDashboard() {
                 </div>
               </div>
               
-              {/* Financial Tip of the Day */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -618,7 +802,6 @@ export default function FinQuestDashboard() {
         </div>
       </div>
 
-      {/* Reward Animation */}
       <AnimatePresence>
         {showReward && completedMission && (
           <motion.div
