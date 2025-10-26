@@ -3,18 +3,24 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Trophy, Zap, Target, TrendingUp, Book, Wallet,
   Star, Award, Flame, ChevronRight, Lock, Check,
-  DollarSign, PiggyBank, LineChart, Users, Gift, Edit2, X
+  DollarSign, PiggyBank, LineChart, Users, Gift, Edit2, X,
+  LogOut
 } from 'lucide-react';
 import leprechun from '../assets/leprechaun.jpg';
+import { logOut } from '../firebase-auth/mockAuthFunctions';
 
 // API Constants
 const API_KEY = "787076b59b64a9f0732ca97ca6267bdf";
 const PAT_ID = "68fd1a569683f20dd51a46c8";
 const PAT_CHECKING = "68fd1cce9683f20dd51a46da";
 
-export default function FinQuestDashboard() {
+export default function FinQuestDashboard({ user: authUser, onLogout }) {
+  // Use authentication user data for name if available
+  const displayName = authUser?.displayName || authUser?.first_name && authUser?.last_name ?
+    `${authUser.first_name} ${authUser.last_name}` : "Alex Rivera";
+  
   const [user, setUser] = useState({
-    name: "Alex Rivera",
+    name: displayName,
     level: 12,
     xp: 2450,
     xpToNext: 3000,
@@ -433,6 +439,20 @@ export default function FinQuestDashboard() {
                   {user.name.split(' ').map(n => n[0]).join('')}
                 </div>
               </div>
+              
+              <motion.button
+                onClick={async () => {
+                  await logOut();
+                  if (onLogout) onLogout();
+                }}
+                className="flex items-center gap-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 px-4 py-2 rounded-lg transition-colors"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                title="Log out"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="font-medium">Logout</span>
+              </motion.button>
             </div>
           </div>
         </div>
