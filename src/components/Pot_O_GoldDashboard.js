@@ -245,11 +245,32 @@ export default function FinQuestDashboard() {
     setTip("");
     
     try {
+      // Get the current financial data
+      const balance = user.balance;
+      const activity = recentActivity;
+      
+      // Create a summary of the last 5 transactions
+      const activitySummary = activity.slice(0, 5).map(act => {
+        const sign = act.type === 'purchase' || act.type === 'withdrawal' ? '-' : '+';
+        return `(${act.time}: ${act.detail}, ${sign}$${act.amount})`;
+      }).join(', ');
+      
+      // Create a financial context string
+      const financialContext = `Here is my financial snapshot: My current balance is $${balance}. My last 5 transactions were: ${activitySummary}.`;
+      
       const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
       const modelName = "gemini-2.5-flash";
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
       
-      const userQuery = "Give me one, short, actionable financial tip for a young adult. Make it sound encouraging for my 'Pot o' Gold' app.";
+      // Set up prompts with the financial context
+      const userQuery = `
+        ${financialContext}
+
+        Based *only* on that financial snapshot, give me 1 or 2 actionable financial tip.
+        If you see a lot of spending on things like 'Starbucks' or 'Chipotle', tell me to slow down.
+        If you see good savings like a 'Paycheck', congratulate me.
+        Make it sound encouraging for my 'Pot o' Gold' app.
+      `;
       const systemPrompt = "You are a friendly financial coach. Provide concise, actionable tips. No more than two sentences.";
       
       const payload = {
