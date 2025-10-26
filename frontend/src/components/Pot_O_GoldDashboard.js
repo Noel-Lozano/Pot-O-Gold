@@ -36,6 +36,11 @@ export default function FinQuestDashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [tip, setTip] = useState("");
   const [loadingTip, setLoadingTip] = useState(false);
+  const [coachMode, setCoachMode] = useState('tip'); // 'tip' or 'qa'
+  const [userQuestion, setUserQuestion] = useState('');
+  const [coachResponse, setCoachResponse] = useState('');
+  const [loadingCoach, setLoadingCoach] = useState(false);
+  const [dailyCoachingUsed, setDailyCoachingUsed] = useState(false);
   
   // Edit state
   const [editingBalance, setEditingBalance] = useState(false);
@@ -272,6 +277,15 @@ export default function FinQuestDashboard() {
       if (data.candidates && data.candidates.length > 0) {
         const text = data.candidates[0].content.parts[0].text;
         setTip(text);
+        
+        // Award streak bonus for daily coaching
+        if (!dailyCoachingUsed) {
+          setUser(prev => ({
+            ...prev,
+            xp: prev.xp + 25
+          }));
+          setDailyCoachingUsed(true);
+        }
       } else {
         setTip("Sorry, couldn't get a tip right now. Try again later!");
       }
@@ -280,6 +294,69 @@ export default function FinQuestDashboard() {
       setTip("Sorry, couldn't get a tip right now. Try again later!");
     } finally {
       setLoadingTip(false);
+    }
+  };
+
+  const askInvestmentCoach = async () => {
+    if (!userQuestion.trim()) return;
+    
+    setLoadingCoach(true);
+    setCoachResponse("");
+    
+    try {
+      const apiKey = process.env.REACT_APP_GEMINI_API_KEY;
+      const modelName = "gemini-2.5-flash";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+      
+      const systemPrompt = `You are an encouraging investment coach for the 'Pot O' Gold' financial literacy app. 
+      Answer investment questions for young adults learning about stocks, crypto, and investments. 
+      Be supportive, educational, and keep responses concise (3-4 sentences max). 
+      If asked about specific stocks or investments, provide balanced educational perspective without financial advice disclaimers.
+      Make it sound conversational and motivating.`;
+      
+      const payload = {
+        "contents": [{ "parts": [{ "text": userQuestion }] }],
+        "tools": [{ "google_search": {} }],
+        "systemInstruction": {
+          "parts": [{ "text": systemPrompt }]
+        }
+      };
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+      if (data.candidates && data.candidates.length > 0) {
+        const text = data.candidates[0].content.parts[0].text;
+        setCoachResponse(text);
+        
+        // Award XP for using investment coach
+        setUser(prev => ({
+          ...prev,
+          xp: prev.xp + 15
+        }));
+        
+        // Award streak bonus for daily coaching
+        if (!dailyCoachingUsed) {
+          setUser(prev => ({
+            ...prev,
+            xp: prev.xp + 25
+          }));
+          setDailyCoachingUsed(true);
+        }
+      } else {
+        setCoachResponse("Sorry, couldn't get an answer right now. Try again later!");
+      }
+    } catch (error) {
+      console.error("Error asking investment coach:", error);
+      setCoachResponse("Sorry, couldn't get an answer right now. Try again later!");
+    } finally {
+      setLoadingCoach(false);
     }
   };
 
@@ -770,32 +847,113 @@ export default function FinQuestDashboard() {
                 transition={{ delay: 0.9 }}
                 className="mt-6 bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
               >
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-yellow-400" />
-                  Financial Tip of the Day
-                </h3>
-                
-                <div className="flex flex-col items-center">
-                  <motion.button
-                    className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg mb-4"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={getFinancialTip}
-                    disabled={loadingTip}
-                  >
-                    {loadingTip ? "Getting Tip..." : "Get Tip of the Day"}
-                  </motion.button>
-                  
-                  {tip && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white/20 p-4 rounded-xl text-center text-white"
-                    >
-                      {tip}
-                    </motion.div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold flex items-center gap-2">
+                    <Gift className="w-5 h-5 text-yellow-400" />
+                    Investment Coach
+                  </h3>
+                  {!dailyCoachingUsed && (
+                    <span className="text-xs bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full">
+                      +25 XP Daily Bonus
+                    </span>
                   )}
                 </div>
+                
+                {/* Mode Toggle */}
+                <div className="flex gap-2 mb-4">
+                  <motion.button
+                    onClick={() => setCoachMode('tip')}
+                    className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
+                      coachMode === 'tip'
+                        ? 'bg-gradient-to-r from-yellow-500 to-amber-600'
+                        : 'bg-white/10 hover:bg-white/20'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Daily Tip
+                  </motion.button>
+                  <motion.button
+                    onClick={() => setCoachMode('qa')}
+                    className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-colors ${
+                      coachMode === 'qa'
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500'
+                        : 'bg-white/10 hover:bg-white/20'
+                    }`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Ask Coach
+                  </motion.button>
+                </div>
+                
+                {coachMode === 'tip' ? (
+                  <div className="flex flex-col items-center">
+                    <motion.button
+                      className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg mb-4"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={getFinancialTip}
+                      disabled={loadingTip}
+                    >
+                      {loadingTip ? "Getting Tip..." : "Get Tip of the Day"}
+                    </motion.button>
+                    
+                    {tip && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white/20 p-4 rounded-xl text-center text-white w-full"
+                      >
+                        {tip}
+                      </motion.div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm text-gray-300 mb-2 block">
+                        Ask about investments, stocks, crypto, or financial decisions:
+                      </label>
+                      <textarea
+                        value={userQuestion}
+                        onChange={(e) => setUserQuestion(e.target.value)}
+                        placeholder="e.g., Should I invest in Tesla stock? Is crypto a good investment?"
+                        className="w-full bg-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none"
+                        rows="3"
+                      />
+                    </div>
+                    
+                    <motion.button
+                      className="w-full px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg font-semibold flex items-center justify-center gap-2 hover:shadow-lg disabled:opacity-50"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={askInvestmentCoach}
+                      disabled={loadingCoach || !userQuestion.trim()}
+                    >
+                      {loadingCoach ? "Coach is thinking..." : "Ask Investment Coach"}
+                      <span className="text-yellow-300">+15 XP</span>
+                    </motion.button>
+                    
+                    {coachResponse && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 p-4 rounded-xl border border-purple-400/30"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Gift className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-purple-300 mb-1">Investment Coach</p>
+                            <p className="text-white">{coachResponse}</p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             </motion.div>
           </div>
