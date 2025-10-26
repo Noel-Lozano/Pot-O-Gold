@@ -47,6 +47,7 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
   const [coachResponse, setCoachResponse] = useState('');
   const [loadingCoach, setLoadingCoach] = useState(false);
   const [dailyCoachingUsed, setDailyCoachingUsed] = useState(false);
+  const [completedMissionIds, setCompletedMissionIds] = useState([]);
   
   // Edit state
   const [editingBalance, setEditingBalance] = useState(false);
@@ -159,6 +160,15 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
     .catch(error => console.error("Error processing transactions:", error));
   }, []);
 
+  const achievements = [
+    { id: 1, title: "First Steps", unlocked: true, icon: Star },
+    { id: 2, title: "Savings Master", unlocked: true, icon: PiggyBank },
+    { id: 3, title: "7-Day Streak", unlocked: true, icon: Flame },
+    { id: 4, title: "Investment Guru", unlocked: false, icon: TrendingUp },
+    { id: 5, title: "Budget Boss", unlocked: false, icon: Wallet },
+    { id: 6, title: "Debt Slayer", unlocked: false, icon: Award }
+  ];
+
   const missions = [
     {
       id: 1,
@@ -166,7 +176,7 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
       description: "Track your spending and save at least $50",
       xp: 150,
       difficulty: "Easy",
-      progress: 35,
+      progress: 100,
       icon: PiggyBank,
       category: "Saving"
     },
@@ -186,34 +196,87 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
       description: "Save 3 months of expenses",
       xp: 500,
       difficulty: "Hard",
-      progress: 15,
+      progress: 100,
       icon: Target,
       category: "Goal"
+    },
+    {
+      id: 4,
+      title: "Track Daily Expenses",
+      description: "Log all your expenses for 7 days straight",
+      xp: 100,
+      difficulty: "Easy",
+      progress: 45,
+      icon: Wallet,
+      category: "Budgeting"
+    },
+    {
+      id: 5,
+      title: "Create a Budget Plan",
+      description: "Set up your monthly budget categories",
+      xp: 175,
+      difficulty: "Medium",
+      progress: 80,
+      icon: Book,
+      category: "Planning"
+    },
+    {
+      id: 6,
+      title: "Learn About Credit Scores",
+      description: "Complete the credit education module",
+      xp: 250,
+      difficulty: "Medium",
+      progress: 25,
+      icon: TrendingUp,
+      category: "Education"
+    },
+    {
+      id: 7,
+      title: "Set Up Auto-Save",
+      description: "Configure automatic transfers to savings",
+      xp: 120,
+      difficulty: "Easy",
+      progress: 90,
+      icon: PiggyBank,
+      category: "Automation"
     }
-  ];
-
-  const achievements = [
-    { id: 1, title: "First Steps", unlocked: true, icon: Star },
-    { id: 2, title: "Savings Master", unlocked: true, icon: PiggyBank },
-    { id: 3, title: "7-Day Streak", unlocked: true, icon: Flame },
-    { id: 4, title: "Investment Guru", unlocked: false, icon: TrendingUp },
-    { id: 5, title: "Budget Boss", unlocked: false, icon: Wallet },
-    { id: 6, title: "Debt Slayer", unlocked: false, icon: Award }
-  ];
+  ].filter(mission => !completedMissionIds.includes(mission.id));
 
   const completeMission = (mission) => {
+    if (mission.progress < 100) return; // Can't claim if not 100%
+    
     setCompletedMission(mission);
     setShowReward(true);
+    
+    // Add XP and handle level up
+    const newXP = user.xp + mission.xp;
+    let newLevel = user.level;
+    let newXpToNext = user.xpToNext;
+    let remainingXP = newXP;
+    
+    // Check if user leveled up
+    while (remainingXP >= newXpToNext) {
+      remainingXP -= newXpToNext;
+      newLevel++;
+      newXpToNext = 3000 + (newLevel - 12) * 500; // Each level increases cap by 500
+    }
+    
     setUser(prev => ({
       ...prev,
-      xp: prev.xp + mission.xp
+      xp: remainingXP,
+      level: newLevel,
+      xpToNext: newXpToNext
     }));
+    
+    // Mark mission as completed
+    setCompletedMissionIds(prev => [...prev, mission.id]);
     
     setTimeout(() => {
       setShowReward(false);
       setCompletedMission(null);
     }, 3000);
   };
+
   
   const saveBalance = () => {
     const newBalance = parseFloat(tempBalance) || 0;
@@ -737,7 +800,7 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
               </h2>
               
               <div className="space-y-4">
-                {missions.map((mission, idx) => (
+                {missions.slice(0, 3).map((mission, idx) => (
                   <motion.div
                     key={mission.id}
                     className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hover:border-purple-400 transition-colors cursor-pointer"
@@ -772,7 +835,11 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
                               </div>
                               <div className="h-2 bg-black/30 rounded-full overflow-hidden">
                                 <motion.div
-                                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500"
+                                  className={`h-full ${
+                                    mission.progress === 100 
+                                      ? 'bg-gradient-to-r from-green-400 to-emerald-500'
+                                      : 'bg-gradient-to-r from-purple-500 to-pink-500'
+                                  }`}
                                   initial={{ width: 0 }}
                                   animate={{ width: `${mission.progress}%` }}
                                   transition={{ duration: 1, delay: 0.5 + idx * 0.1 }}
@@ -788,13 +855,27 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
                       </div>
                       
                       <motion.button
-                        className="ml-4 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg font-semibold flex items-center gap-2 hover:shadow-lg"
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                        className={`ml-4 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 ${
+                          mission.progress === 100
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:shadow-lg'
+                            : 'bg-gray-500/30 cursor-not-allowed opacity-50'
+                        }`}
+                        whileHover={mission.progress === 100 ? { scale: 1.05 } : {}}
+                        whileTap={mission.progress === 100 ? { scale: 0.95 } : {}}
                         onClick={() => completeMission(mission)}
+                        disabled={mission.progress < 100}
                       >
-                        Continue
-                        <ChevronRight className="w-4 h-4" />
+                        {mission.progress === 100 ? (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Claim
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="w-4 h-4" />
+                            Locked
+                          </>
+                        )}
                       </motion.button>
                     </div>
                   </motion.div>
