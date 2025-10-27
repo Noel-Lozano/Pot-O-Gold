@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, LogIn, Zap } from 'lucide-react';
 import { signIn } from './mockAuthFunctions';
-import leprechaun from '../assets/leprechaun.jpg';
+import leprechaun from '../assets/goofy.png';
 
 const LoginForm = ({ onLoginSuccess, onSignUp }) => {
   const [email, setEmail] = useState('');

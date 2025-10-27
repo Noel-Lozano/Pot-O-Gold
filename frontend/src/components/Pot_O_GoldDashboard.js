@@ -6,7 +6,7 @@ import {
   DollarSign, PiggyBank, LineChart, Users, Gift, Edit2, X,
   LogOut
 } from 'lucide-react';
-import leprechun from '../assets/leprechaun.jpg';
+import leprechun from '../assets/goofy.png';
 import { logOut } from '../firebase-auth/mockAuthFunctions';
 
 // API Constants
@@ -23,22 +23,24 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
     name: displayName,
     level: 12,
     xp: 2450,
+    coins: 2450, // Initialize coins to same value as xp
     xpToNext: 3000,
     streak: 7,
-    balance: 1240.50,
+    balance: 0, // Will be updated from API
     savingsGoal: 5000,
     currentSavings: 1850,
     previousBalances: [
-      { month: "Sep 2025", balance: 1150.00, change: 8.5 },
-      { month: "Aug 2025", balance: 1060.00, change: 5.2 },
-      { month: "Jul 2025", balance: 1007.50, change: -2.1 },
-      { month: "Jun 2025", balance: 1029.20, change: 12.3 }
+      { month: "Sep 2025", balance: 6150.00, change: 10.5 },
+      { month: "Aug 2025", balance: 5060.00, change: 14.2 },
+      { month: "Jul 2025", balance: 4007.50, change: -1.1 },
+      { month: "Jun 2025", balance: 4029.20, change: 12.3 }
     ]
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [completedMission, setCompletedMission] = useState(null);
   const [showReward, setShowReward] = useState(false);
+  const [showLevelUp, setShowLevelUp] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
   const [tip, setTip] = useState("");
   const [loadingTip, setLoadingTip] = useState(false);
@@ -48,6 +50,11 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
   const [loadingCoach, setLoadingCoach] = useState(false);
   const [dailyCoachingUsed, setDailyCoachingUsed] = useState(false);
   const [completedMissionIds, setCompletedMissionIds] = useState([]);
+  
+  // Slot Machine state
+  const [reels, setReels] = useState(['🍀', '🍀', '🍀']); // Initial display
+  const [spinResult, setSpinResult] = useState("");
+  const [slotBetAmount, setSlotBetAmount] = useState(10);
   
   // Edit state
   const [editingBalance, setEditingBalance] = useState(false);
@@ -249,24 +256,39 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
     setShowReward(true);
     
     // Add XP and handle level up
-    const newXP = user.xp + mission.xp;
-    let newLevel = user.level;
-    let newXpToNext = user.xpToNext;
-    let remainingXP = newXP;
-    
-    // Check if user leveled up
-    while (remainingXP >= newXpToNext) {
-      remainingXP -= newXpToNext;
-      newLevel++;
-      newXpToNext = 3000 + (newLevel - 12) * 500; // Each level increases cap by 500
-    }
-    
-    setUser(prev => ({
-      ...prev,
-      xp: remainingXP,
-      level: newLevel,
-      xpToNext: newXpToNext
-    }));
+    setUser(currentUser => {
+      const newUserXp = currentUser.xp + mission.xp; // Calculate XP earned from mission
+      const newCoins = currentUser.coins + mission.xp; // Add same amount to coins
+
+      // Check for Level Up
+      if (newUserXp >= currentUser.xpToNext) {
+        // --- LEVEL UP! ---
+        const levelUpReward = 500; // <<< GOLD COINS AWARDED ON LEVEL UP
+        const remainingXp = newUserXp - currentUser.xpToNext; // XP carried over to new level
+        const newLevel = currentUser.level + 1;
+        const newXpToNext = Math.floor(currentUser.xpToNext * 1.5); // Increase XP needed for next level
+
+        console.log(`LEVEL UP! New Level: ${newLevel}, Reward: ${levelUpReward} Coins`);
+        setShowLevelUp(true); // Trigger the level up notification
+
+        // Return the NEW state after level up
+        return {
+          ...currentUser,
+          xp: remainingXp,
+          coins: newCoins + levelUpReward, // Add level up reward to coins
+          level: newLevel,
+          xpToNext: newXpToNext,
+        };
+      } else {
+        // --- NO LEVEL UP ---
+        // Just update the XP and coins from the mission reward
+        return {
+          ...currentUser,
+          xp: newUserXp,
+          coins: newCoins,
+        };
+      }
+    });
     
     // Mark mission as completed
     setCompletedMissionIds(prev => [...prev, mission.id]);
@@ -274,6 +296,7 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
     setTimeout(() => {
       setShowReward(false);
       setCompletedMission(null);
+      setShowLevelUp(false); // Reset level up notification
     }, 3000);
   };
 
@@ -351,7 +374,8 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
         if (!dailyCoachingUsed) {
           setUser(prev => ({
             ...prev,
-            xp: prev.xp + 25
+            xp: prev.xp + 25,
+            coins: prev.coins + 25
           }));
           setDailyCoachingUsed(true);
         }
@@ -404,17 +428,19 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
         const text = data.candidates[0].content.parts[0].text;
         setCoachResponse(text);
         
-        // Award XP for using investment coach
+        // Award XP and coins for using investment coach
         setUser(prev => ({
           ...prev,
-          xp: prev.xp + 15
+          xp: prev.xp + 15,
+          coins: prev.coins + 15
         }));
         
         // Award streak bonus for daily coaching
         if (!dailyCoachingUsed) {
           setUser(prev => ({
             ...prev,
-            xp: prev.xp + 25
+            xp: prev.xp + 25,
+            coins: prev.coins + 25
           }));
           setDailyCoachingUsed(true);
         }
@@ -427,6 +453,71 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
     } finally {
       setLoadingCoach(false);
     }
+  };
+
+  const handleSpin = () => {
+    setSpinResult(""); // Clear old result
+
+    // 1. Check bet amount
+    if (slotBetAmount <= 0) {
+      setSpinResult("Gotta bet something positive, cuh.");
+      return;
+    }
+    if (user.coins < slotBetAmount) {
+      setSpinResult("Not enough coins for that bet!");
+      return;
+    }
+
+    // 2. Subtract bet cost immediately
+    setUser(currentUser => ({
+      ...currentUser,
+      coins: currentUser.coins - slotBetAmount
+    }));
+
+    // 3. Spin the reels
+    const symbols = ['🍒', '🍋', '🍀', '💰'];
+    const newReels = [
+      symbols[Math.floor(Math.random() * symbols.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+      symbols[Math.floor(Math.random() * symbols.length)]
+    ];
+    setReels(newReels); // Update UI to show spinning
+
+    // 4. Check for wins (after a short delay for animation effect)
+    setTimeout(() => {
+      let winAmount = 0;
+      let winMessage = `Lost ${slotBetAmount} coins. Try again!`;
+
+      // Check win conditions (most valuable first)
+      if (newReels[0] === '💰' && newReels[1] === '💰' && newReels[2] === '💰') {
+        winAmount = slotBetAmount * 20; // Jackpot
+        winMessage = `JACKPOT! You won ${winAmount} coins! 💰💰💰`;
+      } else if (newReels[0] === '🍀' && newReels[1] === '🍀' && newReels[2] === '🍀') {
+        winAmount = slotBetAmount * 10;
+        winMessage = `Big Win! ${winAmount} coins! 🍀🍀🍀`;
+      } else if (newReels[0] === '🍒' && newReels[1] === '🍒' && newReels[2] === '🍒') {
+        winAmount = slotBetAmount * 5;
+        winMessage = `Nice! ${winAmount} coins! 🍒🍒🍒`;
+      } else if (
+        (newReels[0] === '🍒' && newReels[1] === '🍒') ||
+        (newReels[0] === '🍒' && newReels[2] === '🍒') ||
+        (newReels[1] === '🍒' && newReels[2] === '🍒')
+      ) {
+        winAmount = slotBetAmount * 2; // Two cherries
+        winMessage = `Small Win! ${winAmount} coins! 🍒🍒`;
+      }
+
+      // 5. Add winnings (if any)
+      if (winAmount > 0) {
+        setUser(currentUser => ({
+          ...currentUser,
+          coins: currentUser.coins + winAmount
+        }));
+      }
+
+      setSpinResult(winMessage);
+
+    }, 500); // 500ms delay to simulate spinning
   };
 
   const currentMonthChange = user.previousBalances[0]?.change || 12.5;
@@ -494,6 +585,10 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
               </div>
               
               <div className="flex items-center gap-3">
+                <div className="flex items-center space-x-2 mr-3">
+                  <span className="text-yellow-400 text-lg font-bold">💰</span>
+                  <span className="text-white text-lg font-semibold">{user.coins} Coins</span>
+                </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-300">{user.name}</p>
                   <p className="text-xs text-gray-400">Level {user.level}</p>
@@ -1056,6 +1151,61 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
                   </div>
                 )}
               </motion.div>
+              
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.0 }}
+                className="mt-6 bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-yellow-400 text-2xl">🎰</span>
+                  <h3 className="text-xl font-bold">Lucky Slots</h3>
+                </div>
+                
+                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-5 border border-white/20">
+                  <div className="flex justify-center items-center space-x-6 my-4 p-5 bg-gradient-to-br from-green-900/60 to-emerald-900/60 rounded-xl text-5xl border border-yellow-500/30 shadow-inner">
+                    <span>{reels[0]}</span>
+                    <span>{reels[1]}</span>
+                    <span>{reels[2]}</span>
+                  </div>
+
+                  <div className="mt-5">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Bet Amount (Coins)</label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-400 text-lg">💰</span>
+                      <input
+                        type="number"
+                        value={slotBetAmount}
+                        onChange={(e) => setSlotBetAmount(Number(e.target.value))}
+                        min="1"
+                        className="w-full p-2 bg-white/10 rounded-lg border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      />
+                    </div>
+                  </div>
+
+                  <motion.button
+                    onClick={handleSpin}
+                    className="w-full mt-5 px-4 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 rounded-lg font-semibold hover:shadow-lg transition-all"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Spin the Reels!
+                  </motion.button>
+
+                  {spinResult && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-3 bg-white/10 rounded-lg border border-white/20 text-center"
+                    >
+                      <p className="text-lg font-semibold text-white">
+                        {spinResult}
+                      </p>
+                    </motion.div>
+                  )}
+                </div>
+              </motion.div>
             </motion.div>
           </div>
         </div>
@@ -1077,11 +1227,11 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
               transition={{ type: "spring", duration: 0.5 }}
             >
               <motion.div
-                animate={{ 
+                animate={{
                   scale: [1, 1.2, 1],
                   rotate: [0, 360, 0]
                 }}
-                transition={{ 
+                transition={{
                   duration: 2,
                   repeat: Infinity,
                   ease: "easeInOut"
@@ -1096,6 +1246,45 @@ export default function FinQuestDashboard({ user: authUser, onLogout }) {
               <div className="flex items-center justify-center gap-2 text-2xl font-bold text-yellow-400">
                 <Zap className="w-6 h-6" />
                 <span>+{completedMission.xp} XP</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showLevelUp && (
+          <motion.div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="bg-gradient-to-br from-yellow-500 to-amber-600 rounded-3xl p-8 max-w-md text-center border-4 border-green-400 shadow-2xl"
+              initial={{ scale: 0, rotate: 180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, rotate: -180 }}
+              transition={{ type: "spring", duration: 0.5 }}
+            >
+              <motion.div
+                animate={{
+                  scale: [1, 1.3, 1],
+                  y: [0, -10, 0]
+                }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+                className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center"
+              >
+                <Zap className="w-12 h-12 text-white" />
+              </motion.div>
+              
+              <h2 className="text-3xl font-bold mb-2">Level Up!</h2>
+              <p className="text-xl mb-4">You've reached level {user.level}!</p>
+              <div className="flex items-center justify-center gap-2 text-2xl font-bold text-green-300">
+                <span className="text-yellow-400 text-3xl">💰</span>
+                <span>+500 Gold Coins</span>
               </div>
             </motion.div>
           </motion.div>
